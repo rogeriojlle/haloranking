@@ -15,9 +15,11 @@ Meteor.methods({
     }
     return collParticipantes.insert({ nome });
   },
+
   perfil(_id) {
     return collParticipantes.findOne({ _id });
   },
+
   minhasPartidas(nome) {
     return collPartidas
       .find({ $or: [{ vitorioso: nome }, { derrotado: nome }] })
@@ -33,6 +35,10 @@ Meteor.methods({
     } else {
       throw new Meteor.Error('não encontrado');
     }
+  },
+
+  participantes() {
+    return collParticipantes.find().fetch();
   },
 });
 

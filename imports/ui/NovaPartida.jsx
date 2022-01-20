@@ -1,7 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import React, { useState } from 'react';
-import { collParticipantes } from '/imports/api/participantes';
-import { useTracker } from 'meteor/react-meteor-data';
+import React, { useState, useEffect } from 'react';
 import {
   Select,
   SelectOption,
@@ -9,204 +7,116 @@ import {
   SelectVariant,
 } from '@patternfly/react-core';
 
-let listaCompleta = [];
+const estadoCompartilhado = {
+  listaCompleta: [],
+  listaDerrotados: [],
+  listaVitoriosos: [],
+  filtroVitoriosos() {
+    return this.listaCompleta.filter(
+      (p) => !this.listaDerrotados.includes(p.nome)
+    );
+  },
+  filtroDerrotados() {
+    return this.listaCompleta.filter(
+      (p) => !this.listaVitoriosos.includes(p.nome)
+    );
+  },
+  alternarDerrotado(nome) {
+    let posicao = this.listaDerrotados.findIndex((d) => d === nome);
+    posicao < 0
+      ? this.listaDerrotados.push(nome)
+      : this.listaDerrotados.splice(posicao, 1);
+  },
+  alternarVitorioso(nome) {
+    let posicao = this.listaVitoriosos.findIndex((v) => v === nome);
+    posicao < 0
+      ? this.listaVitoriosos.push(nome)
+      : this.listaVitoriosos.splice(posicao, 1);
+  },
+};
 
 const SelecaoVitoriosos = (props) => {
+  const [possiveisVitoriosos, setPossiveisVitoriosos] = useState(
+    estadoCompartilhado.filtroVitoriosos()
+  );
+  const [isOpen, setIsOpen] = useState(false);
+  const [selected, setSelected] = useState(estadoCompartilhado.listaVitoriosos);
+
   const onToggle = (...args) => {
-    console.log(args);
+    setPossiveisVitoriosos(estadoCompartilhado.filtroVitoriosos());
+    setIsOpen(!isOpen);
+  };
+
+  const onSelect = (evt, nome) => {
+    estadoCompartilhado.alternarVitorioso(nome);
+    setPossiveisVitoriosos(estadoCompartilhado.filtroVitoriosos());
+    setSelected(estadoCompartilhado.listaVitoriosos);
   };
 
   return (
     <Select
       variant={SelectVariant.checkbox}
-      placeholderText="Filter by status"
+      placeholderText="Quem ganhou?"
       onToggle={onToggle}
-      isGrouped
       hasInlineFilter
+      selections={selected}
+      isOpen={isOpen}
+      onSelect={onSelect}
     >
-      <SelectOption value="Running" />
-      <SelectOption value="Stopped" />
-      <SelectOption value="Down" />
-      <SelectOption value="Degraded" />
-      <SelectOption value="Needs maintenance" />
+      {possiveisVitoriosos.map((p) => (
+        <SelectOption key={p._id} value={p.nome} />
+      ))}
     </Select>
   );
 };
 
 const SelecaoDerrotados = (props) => {
+  const [possiveisDerrotados, setPossiveisDerrotados] = useState(
+    estadoCompartilhado.filtroDerrotados()
+  );
+  const [isOpen, setIsOpen] = useState(false);
+  const [selected, setSelected] = useState(estadoCompartilhado.listaDerrotados);
+
   const onToggle = (...args) => {
-    console.log(args);
+    let derr = estadoCompartilhado.filtroDerrotados();
+    setPossiveisDerrotados(derr);
+    setIsOpen(!isOpen);
+  };
+
+  const onSelect = (evt, nome) => {
+    estadoCompartilhado.alternarDerrotado(nome);
+    setPossiveisDerrotados(estadoCompartilhado.filtroDerrotados());
+    setSelected(estadoCompartilhado.listaDerrotados);
   };
 
   return (
     <Select
       variant={SelectVariant.checkbox}
-      placeholderText="Filter by status"
+      placeholderText="Quem perdeu?"
       onToggle={onToggle}
-      isGrouped
       hasInlineFilter
+      selections={selected}
+      isOpen={isOpen}
+      onSelect={onSelect}
     >
-      <SelectOption value="Running" />
-      <SelectOption value="Stopped" />
-      <SelectOption value="Down" />
-      <SelectOption value="Degraded" />
-      <SelectOption value="Needs maintenance" />
+      {possiveisDerrotados.map((p) => (
+        <SelectOption key={p._id} value={p.nome} />
+      ))}
     </Select>
   );
 };
 
-const dividirTimes = (participantes) => {
-  let ponteiro = true;
-  const vitorioso = [];
-  const derrotado = [];
-  for (let j of participantes) {
-    if (ponteiro) {
-      vitorioso.push(j);
-    } else {
-      derrotado.push(j);
-    }
-    ponteiro = !ponteiro;
-  }
-  return { vitorioso, derrotado };
-};
-
-Meteor.call('participantes', (err, res) => {
-  //false significa que ele não está selecionado
-  listaCompleta = res.map((p) => [p, false]);
-});
-
 export const NovaPartida = () => {
-  const participantes = useTracker(() => {
-    return collParticipantes.find().fetch();
-  });
-  const preparar = (evt) => {
-    evt.preventDefault();
-    const form = document.querySelector('#form_participantes');
-    const inputs = form.elements;
-    let participantes = new Set(
-      [...inputs]
-        .filter((input) => input.value.length)
-        .map(({ value }) => value)
-    );
-    if (participantes.size > 1) {
-      if (participantes.size % 2 === 0) {
-        const { derrotado, vitorioso } = dividirTimes(participantes);
-        const tipo = vitorioso.length;
-        Meteor.call(
-          'addPartida',
-          { derrotado, vitorioso },
-          function (err, res) {
-            if (!err) {
-              alert('Ok');
-              document.location.href = '/';
-            }
-            console.log({ err, res });
-            return;
-          }
-        );
-      } else {
-        alert(`Erro:impar\n${[...participantes].join('\n')}`);
-        return;
-      }
-    } else {
-      alert('nada a fazer');
-      return;
-    }
-  };
+  if (!estadoCompartilhado.listaCompleta.length) {
+    Meteor.call('participantes', (err, res) => {
+      estadoCompartilhado.listaCompleta = res;
+    });
+  }
 
   return (
-    <>
-      <div style={{ display: 'inline-block' }}>
-        <h3>Nova Partida</h3>
-        <form id="form_participantes">
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                margin: '.5rem',
-              }}
-            >
-              <div style={{ alignSelf: 'center', margin: '.5rem' }}>1x1</div>
-              <div>
-                <input
-                  type="search"
-                  list="datalist_participantes"
-                  placeholder="ganhador"
-                />
-                <br />
-                <input
-                  type="search"
-                  list="datalist_participantes"
-                  placeholder="perdedor"
-                />
-                <br />
-              </div>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                margin: '.5rem',
-              }}
-            >
-              <div style={{ alignSelf: 'center', margin: '.5rem' }}>2x2</div>
-              <div>
-                <input
-                  type="search"
-                  list="datalist_participantes"
-                  placeholder="ganhador"
-                />
-                <br />
-                <input
-                  type="search"
-                  list="datalist_participantes"
-                  placeholder="perdedor"
-                />
-                <br />
-              </div>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                margin: '.5rem',
-              }}
-            >
-              <div style={{ alignSelf: 'center', margin: '.5rem' }}>3x3</div>
-              <div>
-                <input
-                  type="search"
-                  list="datalist_participantes"
-                  placeholder="ganhador"
-                />
-                <br />
-                <input
-                  type="search"
-                  list="datalist_participantes"
-                  placeholder="perdedor"
-                />
-                <br />
-              </div>
-            </div>
-          </div>
-        </form>
-        <div style={{ textAlign: 'end', margin: '.5rem' }}>
-          <button onClick={preparar}>Preparar</button>
-        </div>
-      </div>
-      <datalist id="datalist_participantes">
-        {participantes.map((p) => (
-          <option key={p._id} value={`${p.nome}`}>
-            {p.nome}
-          </option>
-        ))}
-      </datalist>
-    </>
+    <div style={{ display: 'flex', flexDirection: 'row' }}>
+      <SelecaoVitoriosos style={{ flex: 1 }} />
+      <SelecaoDerrotados style={{ flex: 1 }} />
+    </div>
   );
 };
